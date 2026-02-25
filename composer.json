@@ -1,0 +1,30 @@
+{
+    "name": "webcoast/migrator-to-container",
+    "description": "TYPO3 CMS extension to provide migration of content elements to `container` extension",
+    "type": "typo3-cms-extension",
+    "license": "GPL-3.0-or-later",
+    "authors": [
+        {
+            "name": "Thorben Nissen",
+            "email": "thorben@webcoast.dk"
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "extra": {
+        "typo3/cms": {
+            "extension-key": "migrator_to_container"
+        }
+    },
+    "require": {
+        "b13/container": "^3.2",
+        "typo3/cms-core": "^13.4",
+        "symfony/console": "^6.4 || ^7.4",
+        "webcoast/migrator": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "WEBcoast\\MigratorToContainer\\": "Classes"
+        }
+    }
+}
