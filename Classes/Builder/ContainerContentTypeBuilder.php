@@ -272,7 +272,7 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
 
     protected function copyTemplate(ContentTypeProviderInterface $contentTypeProvider, string $contentTypeName, string $targetExtensionKey, string $targetContainerCType): void
     {
-        $templateCode = $contentTypeProvider->getTemplate($contentTypeName);
+        $templateCode = $contentTypeProvider->getFrontendTemplate($contentTypeName);
         if ($templateCode) {
             $templatePath = GeneralUtility::getFileAbsFileName('EXT:' . $targetExtensionKey . '/Resources/Private/Templates/Content/' . GeneralUtility::underscoredToUpperCamelCase($targetContainerCType) . '.html');
             if (file_exists($templatePath)) {
