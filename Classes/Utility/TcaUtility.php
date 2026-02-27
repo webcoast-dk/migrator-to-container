@@ -106,6 +106,10 @@ class TcaUtility
                 $formattedValue = $value ? 'true' : 'false';
             } elseif (is_null($value)) {
                 $formattedValue = 'null';
+            } elseif ($value instanceof \BackedEnum) {
+                $formattedValue = "'" . addslashes((string) $value->value) . "'";
+            } elseif ($value instanceof \UnitEnum) {
+                $formattedValue = "'" . addslashes($value->name) . "'";
             } else {
                 $formattedValue = $value;
             }

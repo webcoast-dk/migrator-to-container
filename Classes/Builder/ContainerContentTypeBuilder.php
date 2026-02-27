@@ -7,17 +7,19 @@ namespace WEBcoast\MigratorToContainer\Builder;
 use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Question\Question;
 use TYPO3\CMS\Core\Package\PackageManager;
+use TYPO3\CMS\Core\Schema\TcaSchemaFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use WEBcoast\Migrator\Builder\AbstractInteractiveContentTypeBuilder;
-use WEBcoast\Migrator\Configuration\ContentTypeProviderInterface;
 use WEBcoast\Migrator\Migration\FieldType;
+use WEBcoast\Migrator\Provider\ContainerTemplateProviderInterface;
+use WEBcoast\Migrator\Provider\ContentTypeProviderInterface;
 use WEBcoast\Migrator\Utility\ArrayUtility;
 use WEBcoast\MigratorToContainer\Utility\TcaUtility;
 use WEBcoast\MigratorToContainer\Utility\XliffUtility;
 
 class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
 {
-    public function __construct(protected readonly PackageManager $packageManager) {}
+    public function __construct(protected readonly PackageManager $packageManager, protected readonly TcaSchemaFactory $schemaFactory) {}
 
     public function getTitle(): string
     {
@@ -61,13 +63,17 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
             }
         }
 
-        $targetCTypeGroup = $this->io->ask('In which wizard category should the content block be placed?', $contentTypeConfiguration['group'] ?? null ?: 'container', function ($value) {
-            if (empty(trim($value))) {
-                throw new \RuntimeException('The wizard category must not be empty.');
-            }
+        $itemGroups = array_keys($this->schemaFactory->get('tt_content')->getField('CType')->getConfiguration()['itemGroups'] ?? []);
+        $groupQuestion = (new Question('In which wizard category should the content block be placed?', $contentTypeConfiguration['group'] ?? null ?: 'container'))
+            ->setAutocompleterValues($itemGroups)
+            ->setValidator(function ($value) {
+                if (empty(trim($value))) {
+                    throw new \RuntimeException('The wizard category must not be empty.');
+                }
 
-            return $value;
-        });
+                return $value;
+            });
+        $targetCTypeGroup = $this->io->askQuestion($groupQuestion);
 
         $languageFile = 'EXT:' . $targetExtensionKey . '/Resources/Private/Language/locallang_' . $targetContainerCType . '.xlf';
         $languageLabelPrefix = 'LLL:' . $languageFile . ':';
@@ -227,12 +233,13 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
             )
         ];
 
-        if ($this->io->askQuestion(new ConfirmationQuestion('Do you want to use an existing field?', false))) {
+        $defaultForUseExistingField = $this->schemaFactory->get('tt_content')->hasField($fieldConfiguration['identifier']);
+        if ($this->io->askQuestion(new ConfirmationQuestion('Do you want to use an existing field?', $defaultForUseExistingField))) {
             $fieldConfiguration['useExistingField'] = true;
         }
 
         if ($field['type'] !== FieldType::SECTION) {
-            $fieldConfiguration['config']['type'] = $field['type'];
+            $fieldConfiguration['type'] = $field['type'];
             $fieldConfiguration = array_replace_recursive($fieldConfiguration, $field['config'] ?? []);
         } else {
             $this->io->block('The field "' . $field['label'] . '" is a section type. Sections are not supported for container elements?', style: 'bg=error;fg=white', padding: true);
@@ -272,7 +279,11 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
 
     protected function copyTemplate(ContentTypeProviderInterface $contentTypeProvider, string $contentTypeName, string $targetExtensionKey, string $targetContainerCType): void
     {
-        $templateCode = $contentTypeProvider->getFrontendTemplate($contentTypeName);
+        if ($contentTypeProvider instanceof ContainerTemplateProviderInterface) {
+            $templateCode = $contentTypeProvider->getContainerTemplate($contentTypeName);
+        } else {
+            $templateCode = $contentTypeProvider->getFrontendTemplate($contentTypeName);
+        }
         if ($templateCode) {
             $templatePath = GeneralUtility::getFileAbsFileName('EXT:' . $targetExtensionKey . '/Resources/Private/Templates/Content/' . GeneralUtility::underscoredToUpperCamelCase($targetContainerCType) . '.html');
             if (file_exists($templatePath)) {
