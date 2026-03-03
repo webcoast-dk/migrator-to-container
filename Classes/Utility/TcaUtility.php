@@ -9,6 +9,8 @@ use B13\Container\Tca\Registry;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
+use WEBcoast\Migrator\Migration\Grid;
+use WEBcoast\Migrator\Utility\ArrayUtility;
 
 class TcaUtility
 {
@@ -157,7 +159,7 @@ class TcaUtility
         return $content;
     }
 
-    public static function writeContainerContentTypeTcaConfiguration(string $file, string $containerCType, string $group, string $title, string $description, array $grid, ?string $iconIdentifier): void
+    public static function writeContainerContentTypeTcaConfiguration(string $file, string $containerCType, string $group, string $title, string $description, ?Grid $grid, ?string $iconIdentifier): void
     {
         $content = <<<'EOF'
             <?php
@@ -174,7 +176,26 @@ class TcaUtility
         $content = self::addImport($content, Registry::class);
         $content = self::addImport($content, ContainerConfiguration::class);
 
-        $columnConfigPhpCode = trim(self::arrayToPhpCode($grid, 3), " \n\r\t\v\0,");
+        // Convert grid rows and columns to array structure that can be used in the ContainerConfiguration
+        $gridArray = [];
+        if ($grid) {
+            foreach ($grid as $row) {
+                $rowArray = [];
+                foreach ($row as $column) {
+                    $rowArray[] = ArrayUtility::removeEmptyValuesFromArray([
+                        'name' => $column->getName(),
+                        'colPos' => $column->getColPos(),
+                        'colspan' => $column->getColspan(),
+                        'rowspan' => $column->getRowspan(),
+                        'allowed' => $column->getAllowed(),
+                        'disallowed' => $column->getDisallowed(),
+                        'maxitems' => $column->getMaxitems(),
+                    ]);
+                }
+                $gridArray[] = $rowArray;
+            }}
+
+        $columnConfigPhpCode = trim(self::arrayToPhpCode($gridArray, 3), " \n\r\t\v\0,");
 
         $iconCode = '';
         if (!empty($iconIdentifier)) {

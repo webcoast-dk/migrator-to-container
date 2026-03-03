@@ -10,6 +10,9 @@ use TYPO3\CMS\Core\Package\PackageManager;
 use TYPO3\CMS\Core\Schema\TcaSchemaFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use WEBcoast\Migrator\Builder\AbstractInteractiveContentTypeBuilder;
+use WEBcoast\Migrator\Migration\ContentType;
+use WEBcoast\Migrator\Migration\Field;
+use WEBcoast\Migrator\Migration\FieldCollection;
 use WEBcoast\Migrator\Migration\FieldType;
 use WEBcoast\Migrator\Provider\ContainerTemplateProviderInterface;
 use WEBcoast\Migrator\Provider\ContentTypeProviderInterface;
@@ -26,7 +29,7 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
         return 'Container';
     }
 
-    public function buildContentTypeConfiguration(string $contentTypeName, array $contentTypeConfiguration, ContentTypeProviderInterface $contentTypeProvider): void
+    public function buildContentTypeConfiguration(string $contentTypeName, ContentType $contentTypeConfiguration, ContentTypeProviderInterface $contentTypeProvider): void
     {
         $this->io->section(sprintf('Building container configuration for "%s"', $contentTypeName));
 
@@ -45,8 +48,8 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
         });
         $targetExtensionKey = $this->io->askQuestion($extensionQuestion);
 
-        $targetContainerCType = self::buildContentTypeName($contentTypeConfiguration['title']);
-        $targetContainerCType = $this->io->ask('What is the name of the content block?', $targetContainerCType, function ($value) {
+        $targetContainerCType = self::buildContentTypeName($contentTypeConfiguration->getTitle());
+        $targetContainerCType = $this->io->ask('What is the name/identifier of the content type?', $targetContainerCType, function ($value) {
             if (empty($value) || preg_match('/[^\w_]/', $value)) {
                 throw new \RuntimeException('The name of the content block must not be empty and must only container characters, numbers and underscores.');
             }
@@ -64,7 +67,7 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
         }
 
         $itemGroups = array_keys($this->schemaFactory->get('tt_content')->getField('CType')->getConfiguration()['itemGroups'] ?? []);
-        $groupQuestion = (new Question('In which wizard category should the content block be placed?', $contentTypeConfiguration['group'] ?? null ?: 'container'))
+        $groupQuestion = (new Question('In which wizard category should the content block be placed?', $contentTypeConfiguration->getGroup() ?? null ?: 'container'))
             ->setAutocompleterValues($itemGroups)
             ->setValidator(function ($value) {
                 if (empty(trim($value))) {
@@ -80,30 +83,30 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
         $labels = [];
 
         // Extract title and description to language file, if they are not already language labels
-        if (!str_starts_with($contentTypeConfiguration['title'], 'LLL:')) {
+        if (!str_starts_with($contentTypeConfiguration->getTitle(), 'LLL:')) {
             $labelKey = 'tt_content.CType.' . $targetContainerCType . '.title';
-            $labels[$labelKey] = $contentTypeConfiguration['title'];
-            $contentTypeConfiguration['title'] = $languageLabelPrefix . $labelKey;
+            $labels[$labelKey] = $contentTypeConfiguration->getTitle();
+            $contentTypeConfiguration->setTitle($languageLabelPrefix . $labelKey);
         }
 
-        if (!str_starts_with($contentTypeConfiguration['description'] ?? '', 'LLL:')) {
+        if (!str_starts_with($contentTypeConfiguration->getDescription() ?? '', 'LLL:')) {
             $labelKey = 'tt_content.CType.' . $targetContainerCType . '.description';
-            $labels[$labelKey] = $contentTypeConfiguration['description'] ?? '';
-            $contentTypeConfiguration['description'] = $languageLabelPrefix . $labelKey;
+            $labels[$labelKey] = $contentTypeConfiguration->getDescription() ?? '';
+            $contentTypeConfiguration->setDescription($languageLabelPrefix . $labelKey);
         }
 
         // Extract column names to language file, if they are not already language labels
-        foreach ($contentTypeConfiguration['grid'] as &$row) {
-            foreach ($row as &$column) {
-                if (!str_starts_with($column['name'], 'LLL:')) {
-                    $labelKey = 'tt_content.' . $targetContainerCType . '.' . $column['name'] . '.label';
-                    $labels[$labelKey] = $column['name'];
-                    $column['name'] = $languageLabelPrefix . $labelKey;
+        foreach ($contentTypeConfiguration->getGrid() as $row) {
+            foreach ($row as $column) {
+                if (!str_starts_with($column->getName(), 'LLL:')) {
+                    $labelKey = 'tt_content.' . $targetContainerCType . '.' . $column->getName() . '.label';
+                    $labels[$labelKey] = $column->getName();
+                    $column->setName($languageLabelPrefix . $labelKey);
                 }
             }
         }
 
-        $containerFields = $this->buildFieldsConfiguration($contentTypeConfiguration['fields'] ?? []);
+        $containerFields = $this->buildFieldsConfiguration($contentTypeConfiguration->getFields());
         $columnsOverrides = [];
         $fieldIdentifiers = array_column($containerFields, 'identifier');
 
@@ -150,7 +153,7 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
         $containerFields = array_combine($fieldIdentifiers, $containerFields);
         $containerFields = ArrayUtility::removeEmptyValuesFromArray($containerFields);
 
-        TcaUtility::writeContainerContentTypeTcaConfiguration($tcaContentTypeFile, $targetContainerCType, $targetCTypeGroup, $contentTypeConfiguration['title'], $contentTypeConfiguration['description'], $contentTypeConfiguration['grid'], $contentTypeConfiguration['iconIdentifier'] ?? null);
+        TcaUtility::writeContainerContentTypeTcaConfiguration($tcaContentTypeFile, $targetContainerCType, $targetCTypeGroup, $contentTypeConfiguration->getTitle(), $contentTypeConfiguration->getDescription(), $contentTypeConfiguration->getGrid(), $contentTypeConfiguration->getIconIdentifier() ?? null);
         TcaUtility::addColumDefinitionsToTcaOverrides($tcaContentTypeFile, $containerFields, $columnsOverrides, $targetContainerCType);
         $tcaOverridesFile = GeneralUtility::getFileAbsFileName('EXT:' . $targetExtensionKey . '/Configuration/TCA/Overrides/tt_content.php');
         TcaUtility::requireTcaOverrideInFile($tcaOverridesFile, $tcaContentTypeFile);
@@ -162,17 +165,17 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
         $this->io->block('  Container configuration finished  ', style: 'bg=green;fg=white', padding: true);
     }
 
-    private function buildFieldsConfiguration(array $fields): array
+    private function buildFieldsConfiguration(FieldCollection $fields): array
     {
         $containerFields = [];
         foreach ($fields as $field) {
-            if ($field['type'] === FieldType::TAB) {
-                $this->io->writeln('<b>Tab:</b> ' . $field['title'] . ' (' . $field['identifier'] . ')');
+            if ($field->getType() === FieldType::TAB) {
+                $this->io->writeln('<b>Tab:</b> ' . $field->getLabel() . ' (' . $field->getIdentifier() . ')');
                 if ($this->io->askQuestion(new ConfirmationQuestion('Do you want to process this tab?', true))) {
                     $containerFields[] = $this->buildFieldConfiguration($field);
                 }
             } else {
-                $this->io->writeln('<b>Field:</b> ' . $field['label'] . ' (' . $field['identifier'] . ')');
+                $this->io->writeln('<b>Field:</b> ' . $field->getLabel() . ' (' . $field->getIdentifier() . ')');
                 if ($this->io->askQuestion(new ConfirmationQuestion('Do you want to process this field?', true))) {
                     $containerFields[] = $this->buildFieldConfiguration($field);
                 }
@@ -182,12 +185,12 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
         return $containerFields;
     }
 
-    protected function buildFieldConfiguration(array $field): array
+    protected function buildFieldConfiguration(Field $field): array
     {
-        if ($field['type'] === FieldType::TAB) {
+        if ($field->getType() === FieldType::TAB) {
             return [
                 'identifier' => $this->io->askQuestion(
-                    (new Question('What is the identifier of the tab?', GeneralUtility::camelCaseToLowerCaseUnderscored($field['identifier'])))
+                    (new Question('What is the identifier of the tab?', GeneralUtility::camelCaseToLowerCaseUnderscored($field->getIdentifier())))
                         ->setValidator(function ($value) {
                             if (empty($value)) {
                                 throw new \RuntimeException('The identifier of the tab must not be empty.');
@@ -198,7 +201,7 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
                 ),
                 'type' => 'Tab',
                 'label' => $this->io->askQuestion(
-                    (new Question('What is the label of the field?', $field['title']))
+                    (new Question('What is the label of the field?', $field->getLabel()))
                         ->setValidator(function ($value) {
                             if (empty($value)) {
                                 throw new \RuntimeException('The label of the field must not be empty.');
@@ -212,7 +215,7 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
 
         $fieldConfiguration = [
             'identifier' => $this->io->askQuestion(
-                (new Question('What is the identifier of the field?', GeneralUtility::camelCaseToLowerCaseUnderscored($field['identifier'])))
+                (new Question('What is the identifier of the field?', GeneralUtility::camelCaseToLowerCaseUnderscored($field->getIdentifier())))
                     ->setValidator(function ($value) {
                         if (empty($value)) {
                             throw new \RuntimeException('The identifier of the field must not be empty.');
@@ -222,7 +225,7 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
                     })
             ),
             'label' => $this->io->askQuestion(
-                (new Question('What is the label of the field?', $field['label']))
+                (new Question('What is the label of the field?', $field->getLabel()))
                     ->setValidator(function ($value) {
                         if (empty($value)) {
                             throw new \RuntimeException('The label of the field must not be empty.');
@@ -238,11 +241,11 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
             $fieldConfiguration['useExistingField'] = true;
         }
 
-        if ($field['type'] !== FieldType::SECTION) {
-            $fieldConfiguration['type'] = $field['type'];
-            $fieldConfiguration = array_replace_recursive($fieldConfiguration, $field['config'] ?? []);
+        if ($field->getType() !== FieldType::SECTION) {
+            $fieldConfiguration['type'] = $field->getType()->value;
+            $fieldConfiguration = array_replace_recursive($fieldConfiguration, $field->getConfiguration() ?? []);
         } else {
-            $this->io->block('The field "' . $field['label'] . '" is a section type. Sections are not supported for container elements?', style: 'bg=error;fg=white', padding: true);
+            $this->io->block('The field "' . $field->getLabel() . '" is a section type. Sections are not supported for migration to container elements.', style: 'bg=error;fg=white', padding: true);
         }
 
         if ($fieldConfiguration['useExistingField'] ?? false) {
@@ -272,9 +275,9 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
         return strtolower(trim($title));
     }
 
-    public function supports(array $normalizedConfiguration): bool
+    public function supports(ContentType $contentType): bool
     {
-        return !empty($normalizedConfiguration['grid']);
+        return !empty($contentType->getGrid());
     }
 
     protected function copyTemplate(ContentTypeProviderInterface $contentTypeProvider, string $contentTypeName, string $targetExtensionKey, string $targetContainerCType): void
