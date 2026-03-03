@@ -16,7 +16,7 @@ abstract class ContainerAwareRecordMigrator extends RecordDataMigrator
                 'colPos' => $colPos,
             ],
             'action' => 'paste',
-            'target' => $after ? '-' . $after : $containerId,
+            'target' => '-' . ($after ?: $containerId),
         ]);
     }
 }
