@@ -34,7 +34,7 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
         $this->io->section(sprintf('Building container configuration for "%s"', $contentTypeName));
 
         $availableExtensions = $this->getPossibleExtensions();
-        $extensionQuestion = new Question('In which extension, should we place the content block?');
+        $extensionQuestion = new Question('In which extension, should we place the container content type?');
         $extensionQuestion->setAutocompleterValues($availableExtensions);
         $extensionQuestion->setValidator(function ($extension) use ($availableExtensions) {
             if (empty($extension)) {
@@ -67,7 +67,7 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
         }
 
         $itemGroups = array_keys($this->schemaFactory->get('tt_content')->getField('CType')->getConfiguration()['itemGroups'] ?? []);
-        $groupQuestion = (new Question('In which wizard category should the content block be placed?', $contentTypeConfiguration->getGroup() ?? null ?: 'container'))
+        $groupQuestion = (new Question('In which wizard category should the content element be placed?', $contentTypeConfiguration->getGroup() ?? null ?: 'container'))
             ->setAutocompleterValues($itemGroups)
             ->setValidator(function ($value) {
                 if (empty(trim($value))) {
@@ -169,12 +169,7 @@ class ContainerContentTypeBuilder extends AbstractInteractiveContentTypeBuilder
     {
         $containerFields = [];
         foreach ($fields as $field) {
-            if ($field->getType() === FieldType::TAB) {
-                $this->io->writeln('<b>Tab:</b> ' . $field->getLabel() . ' (' . $field->getIdentifier() . ')');
-                if ($this->io->askQuestion(new ConfirmationQuestion('Do you want to process this tab?', true))) {
-                    $containerFields[] = $this->buildFieldConfiguration($field);
-                }
-            } else {
+            if ($field->getType() !== FieldType::TAB) {
                 $this->io->writeln('<b>Field:</b> ' . $field->getLabel() . ' (' . $field->getIdentifier() . ')');
                 if ($this->io->askQuestion(new ConfirmationQuestion('Do you want to process this field?', true))) {
                     $containerFields[] = $this->buildFieldConfiguration($field);
